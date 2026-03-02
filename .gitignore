@@ -1,0 +1,19 @@
+# Environment variables — never commit
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+
+# Data / embeddings (large files)
+data/shl_catalog_embeddings.npy
+
+# Evaluation output
+evaluation/
+
+# Temp files
+tmpclaude-*
+*.log
