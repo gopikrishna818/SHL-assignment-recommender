@@ -253,8 +253,9 @@ def generate_test_predictions(
 def main():
     parser = argparse.ArgumentParser(description="Evaluate SHL Recommender")
     parser.add_argument("--api",   default="http://localhost:8000", help="API base URL")
-    parser.add_argument("--train", default="data/train.csv",        help="Path to train CSV")
-    parser.add_argument("--test",  default="data/test.csv",         help="Path to test CSV")
+    _data = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
+    parser.add_argument("--train", default=os.path.join(_data, "train.csv"), help="Path to train CSV")
+    parser.add_argument("--test",  default=os.path.join(_data, "test.csv"),  help="Path to test CSV")
     parser.add_argument("--mode",  choices=["train", "test", "both"], default="both")
     parser.add_argument("--k",     type=int, default=10,             help="K for Recall@K")
     parser.add_argument("--out",   default="evaluation/test_predictions.csv",

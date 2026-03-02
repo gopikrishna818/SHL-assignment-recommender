@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 # Config
 # ─────────────────────────────────────────────────────────────────────────────
 
-CATALOG_PATH    = os.getenv("CATALOG_PATH", "data/shl_catalog.json")
+CATALOG_PATH    = os.getenv("CATALOG_PATH", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "shl_catalog.json"))
 EMBED_MODEL     = os.getenv("EMBED_MODEL",  "all-MiniLM-L6-v2")
 TOP_K_DENSE     = int(os.getenv("TOP_K_DENSE", "120"))
 TOP_K_BM25      = int(os.getenv("TOP_K_BM25",  "100"))

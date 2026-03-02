@@ -37,7 +37,7 @@ PAGE_SIZE = 12
 MAX_PAGES = 40       # 12 × 40 = 480 max
 DELAY     = 1.5      # seconds between page requests (be polite)
 
-OUT_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+OUT_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
 OUT_FILE = os.path.join(OUT_DIR, "shl_catalog.json")
 
 VALID_TYPE_CODES = {"A", "B", "C", "D", "E", "K", "P", "S"}
