@@ -8,8 +8,19 @@ __pycache__/
 .venv/
 *.egg-info/
 
-# Data / embeddings (large files)
+# Data / embeddings / binary indexes (large files — not needed for deployment)
 data/shl_catalog_embeddings.npy
+data/faiss_index.bin
+data/precomputed_faiss_index.bin
+data/faiss_meta.json
+data/metadata.parquet
+data/processed_assessments.csv
+
+# Junk files
+=1.8.0
+=2.7.0
+nul
+patch_missing_details.py
 
 # Evaluation output
 evaluation/

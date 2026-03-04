@@ -10,6 +10,7 @@ Run: uvicorn api:app --host 0.0.0.0 --port 8000 --reload
 
 import os
 import sys
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -108,7 +109,9 @@ async def recommend(req: RecommendRequest):
 
     try:
         rec     = get_recommender()
-        results = rec.recommend(query, n_results=10)
+        # Run sync recommender in a thread pool so blocking Groq HTTP calls
+        # don't interfere with asyncio's event loop (critical on Windows).
+        results = await asyncio.to_thread(rec.recommend, query, 10)
 
         if not results:
             raise HTTPException(status_code=404, detail="No recommendations found.")

@@ -1,52 +1,42 @@
 # SHL Assessment Recommendation System
 
-I built this as part of the SHL AI Intern assignment. The idea is simple — given a natural language query or job description, return the most relevant SHL Individual Test Solutions. I went through several iterations and ended up with a 4-layer pipeline that achieves **Mean Recall@10 = 1.0000** on the labeled training set.
+Built as part of the SHL Generative AI Intern assignment. Given a natural language query or job description, the system returns the most relevant SHL Individual Test Solutions ranked by relevance.
 
 ---
 
-## How I built it — Architecture
+## Architecture
 
 ```
 Input (query / JD text)
   ↓
-[1] Preprocessing
-     Clean up the text — lowercase, strip punctuation, extract URLs
+[Step 1] Preprocessing
+     Lowercase, strip punctuation, normalise whitespace.
+     If a URL is detected in the query, the page text is fetched and appended.
   ↓
-[2] Query Expansion
-     I expand short queries with synonyms before encoding them.
-     e.g. "java" → "Java programming OOP object-oriented"
-     e.g. "sales" → "persuasion negotiation communication"
-     This made a big difference for short 2-3 word queries.
+[Step 2] LLM Query Decomposition  (Groq llama-3.3-70b-versatile)
+     The LLM breaks down the query into:
+       - enriched_query: keyword-rich version for BM25 retrieval
+       - required_types: SHL test type codes (A, B, C, K, P, ...)
+       - max_duration:   time constraint in minutes (if mentioned)
+     Falls back to a heuristic rule-based decomposer if Groq is unavailable.
   ↓
-[3] Duration Extractor
-     Regex that parses time constraints from the query.
-     Handles things like "max 40 minutes", "within an hour", "30-40 mins"
+[Step 3] Hybrid BM25 Retrieval
+     BM25 is run on BOTH:
+       a. The LLM-enriched query   (captures role-type terminology)
+       b. The original raw query   (captures domain-specific terms from the JD)
+     The two result lists are merged using Reciprocal Rank Fusion (RRF).
+     If a FAISS index is available, it is also merged in via RRF.
   ↓
-[Layer 1] Knowledge Base
-     I manually mapped specific job families to their correct assessments
-     based on the training data. This gives a strong precision floor
-     for queries that match known roles like "graduate trainee" or "call centre".
+[Step 4] Metadata Filter  (soft)
+     Duration filter: drops items clearly over the stated time limit
+                      (only if at least 5 items survive).
+     Type filter:     keeps items matching ANY of the required SHL test types
+                      (only if at least 5 items survive).
   ↓
-[Layer 2] Pattern Rules
-     Regex patterns for broader role types — data analyst, ML, Java dev, QA, etc.
-     I added these after noticing pure semantic search was confusing domains
-     (e.g. "data scientist" was returning QA/Selenium items).
-  ↓
-[Layer 3] Hybrid RAG
-     FAISS dense search (sentence-transformers all-MiniLM-L6-v2) + BM25 sparse.
-     I use a 0.55 / 0.45 weighted combination.
-     Pure semantic search missed exact-match queries; pure BM25 missed paraphrases.
-     The hybrid handles both cases well.
-  ↓
-[Layer 4] Groq LLM Reranking
-     I send the assembled candidates to llama-3.1-8b-instant via Groq
-     and ask it to reorder them by relevance.
-     Important: the LLM only reorders — it never drops items.
-     This means Recall@10 can't get worse from LLM failures.
-  ↓
-Duration Filter (soft)
-     Remove items that exceed the stated time limit.
-     Only apply if at least 5 results remain after filtering.
+[Step 5] LLM Reranking  (Groq llama-3.3-70b-versatile → fallback llama-3.1-8b-instant)
+     Filtered candidates are sent to the LLM which reorders them by relevance
+     to the original query. The LLM only reorders — it never drops items.
+     If the LLM fails, the system falls back to BM25 retrieval order.
   ↓
 Output: Top 10 ranked SHL Individual Test Solutions
 ```
@@ -55,22 +45,10 @@ Output: Top 10 ranked SHL Individual Test Solutions
 
 ## Results
 
-| What | Score |
-|------|-------|
-| Mean Recall@10 on 10 train queries | **1.0000** |
+| Metric | Score |
+|--------|-------|
+| Mean Recall@10 (train set, 10 queries) | **0.2789** |
 | Test predictions generated | 90 rows (9 queries × 10) |
-
-How I got there:
-
-| Version | What I changed | Recall@10 |
-|---------|---------------|-----------|
-| v1 | BM25 only | ~0.28 |
-| v2 | FAISS + sentence-transformers | ~0.51 |
-| v3 | FAISS + LLM reranking | ~0.65 |
-| v4 | Better embed_text (added description + type) | ~0.71 |
-| v5 | Duration filtering + query expansion | ~0.76 |
-| v6 | BM25 hybrid | ~0.82 |
-| v7 | KB layer + pattern rules + Groq | **1.0000** |
 
 ---
 
@@ -81,22 +59,23 @@ shl-project/
 ├── .env                        # Groq API keys (not committed)
 ├── .gitignore
 ├── requirements.txt
+├── runtime.txt
 ├── APPROACH.md
 ├── README.md
 ├── backend/
 │   ├── api.py                  # FastAPI server
-│   ├── recommender.py          # the 4-layer pipeline
-│   ├── scraper.py              # scrapes SHL catalog
-│   ├── evaluate.py             # computes Recall@10
-│   ├── data/
-│   │   ├── shl_catalog.json    # 398 scraped assessments
-│   │   ├── train.csv           # 10 labeled training queries
-│   │   └── test.csv            # 9 test queries
-│   └── evaluation/
-│       ├── train_results_recall_at_10.json   ← submission
-│       └── test_predictions.csv              ← submission
+│   ├── recommender.py          # Full pipeline (decompose → retrieve → rerank)
+│   ├── scraper.py              # Scrapes SHL product catalog
+│   └── evaluate.py             # Computes Recall@10 on train/test sets
+├── data/
+│   ├── shl_catalog.json        # 389 scraped SHL assessments
+│   ├── train.csv               # 10 labeled training queries (provided by SHL)
+│   └── test.csv                # 9 test queries (provided by SHL)
+├── evaluation/
+│   ├── train_results_recall_at_10.json   # train evaluation output
+│   └── test_predictions.csv             # submission file
 └── frontend/
-    └── index.html              # single-page UI
+    └── index.html              # Single-page search UI
 ```
 
 ---
@@ -114,31 +93,32 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Create `.env` in the root:
+Create `.env` in the project root:
 
 ```env
 GROQ_API_KEY_1=gsk_...
 GROQ_API_KEY_2=gsk_...
-# I added up to 10 keys for rotation in case one hits rate limits
+# Add up to 10 keys — they are rotated automatically on rate-limit errors
 ```
 
-Free Groq keys: [console.groq.com](https://console.groq.com). If you don't add any keys, the system still works — it just skips the LLM reranking step and uses RAG order.
+Free Groq API keys: [console.groq.com](https://console.groq.com)
+
+If no keys are provided, the system still works — LLM decomposition and reranking are skipped and BM25 retrieval order is used.
 
 ---
 
 ## Running
 
 ```bash
-cd backend
-uvicorn api:app --reload --port 8000
+python backend/api.py
 ```
 
-| URL | What it is |
-|-----|------------|
-| `http://localhost:8000/` | Frontend UI |
-| `http://localhost:8000/docs` | Swagger / API explorer |
+| URL | Description |
+|-----|-------------|
+| `http://localhost:8000/` | Redirects to frontend UI |
 | `http://localhost:8000/health` | Health check |
-| `http://localhost:8000/recommend` | POST endpoint |
+| `http://localhost:8000/recommend` | POST — main endpoint |
+| `http://localhost:8000/docs` | Swagger / API explorer |
 
 ---
 
@@ -146,24 +126,26 @@ uvicorn api:app --reload --port 8000
 
 **POST /recommend**
 
+Request:
 ```json
 {
-  "query": "I am hiring for Java developers who can collaborate with business teams."
+  "query": "I am hiring for Java developers who can collaborate with business teams. Max 40 minutes."
 }
 ```
 
 Response:
 ```json
 {
+  "query": "...",
   "recommended_assessments": [
     {
-      "url": "https://www.shl.com/solutions/products/...",
-      "name": "Java (New)",
-      "adaptive_support": "No",
+      "url": "https://www.shl.com/solutions/products/product-catalog/view/core-java-entry-level-new/",
+      "name": "Core Java (Entry Level) (New)",
       "description": "...",
       "duration": 35,
       "remote_support": "Yes",
-      "test_type": ["Knowledge & Skills"]
+      "adaptive_support": "No",
+      "test_type": ["Knowledge and Skills"]
     }
   ]
 }
@@ -176,24 +158,24 @@ Response:
 ## Running Evaluation
 
 ```bash
-cd backend
-python evaluate.py --mode both
+python backend/evaluate.py --mode both --api http://localhost:8000
 ```
 
-- `--mode train` — runs all 10 train queries, prints Recall@10 per query
+- `--mode train` — evaluates all 10 train queries, prints Recall@10 per query
 - `--mode test` — generates `evaluation/test_predictions.csv`
-- `--mode both` — does both
+- `--mode both` — runs both
 
 ---
 
 ## Tech Stack
 
-| Component | What I used | Why |
-|-----------|------------|-----|
-| Embeddings | sentence-transformers `all-MiniLM-L6-v2` | Free, 80MB, good sentence similarity |
-| Vector search | FAISS IndexFlatIP | Fast cosine search, no infra needed |
-| Keyword search | rank-bm25 | Boosts exact-match recall |
-| LLM reranker | Groq `llama-3.1-8b-instant` | Free API, fast, good enough for reranking |
-| API | FastAPI + Uvicorn | Auto docs, async, production ready |
-| Frontend | Vanilla HTML/CSS/JS | No framework needed for this |
-| Scraping | requests + BeautifulSoup | Simple and reliable |
+| Component | Technology | Reason |
+|-----------|------------|--------|
+| Query understanding | Groq `llama-3.3-70b-versatile` | Free API, strong instruction-following |
+| Keyword retrieval | `rank-bm25` (BM25Okapi) | Exact-match recall, no infra required |
+| Merge strategy | Reciprocal Rank Fusion (RRF) | Stable combination of multiple ranked lists |
+| LLM reranking | Groq `llama-3.3-70b-versatile` | Contextual relevance scoring |
+| API | FastAPI + Uvicorn | Auto docs, async support |
+| Frontend | Vanilla HTML/CSS/JS | No framework overhead needed |
+| Scraping | requests + BeautifulSoup | Simple, no JS rendering required |
+| Deployment | Render | Free tier, auto-deploy from GitHub |
