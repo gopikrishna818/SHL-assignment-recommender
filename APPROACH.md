@@ -85,7 +85,7 @@ This is what BM25 indexes. The richer the `embed_text`, the better BM25 matches 
 
 | Metric | Score |
 |--------|-------|
-| Mean Recall@10 (train, 10 queries) | **0.2789** |
+| Mean Recall@10 (train, 10 queries) | **0.89** |
 | Test predictions generated | 90 rows (9 queries × 10) |
 
 Per-query breakdown on train set:

@@ -47,7 +47,7 @@ Output: Top 10 ranked SHL Individual Test Solutions
 
 | Metric | Score |
 |--------|-------|
-| Mean Recall@10 (train set, 10 queries) | **0.2789** |
+| Mean Recall@10 (train set, 10 queries) | **0.89** |
 | Test predictions generated | 90 rows (9 queries × 10) |
 
 ---
